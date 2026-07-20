@@ -134,6 +134,8 @@ openssl x509 -in ios_distribution.cer -inform DER -out ios_distribution.pem -out
 
 Şimdi bu dosyayı senin en başta ürettiğin key ile birleştirip .p12 yapmak için şu kodu yapıştır ve Enter'a bas:
 openssl pkcs12 -export -inkey besat.key -in ios_distribution.pem -out Certificate.p12
+bu üst çalışmazsa bunu da deneyebilirsin ----1
+openssl pkcs12 -export -inkey besat.key -in ios_distribution.pem -out Certificate.p12 -legacy
 
 Enter'a basınca ekranda "Enter Export Password:" diyecek. Burada belirleyeceğin şifre çok önemli (Örneğin besat123 yaz). Yazarken ekranda harfler görünmez, sen yazıp Enter'a bas.
 <img width="823" height="277" alt="image" src="https://github.com/user-attachments/assets/5c2c075e-1e0a-4f5d-9712-e200ddc0be31" />
