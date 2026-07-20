@@ -4,7 +4,8 @@ on:
   push:
     branches:
       - main # Eğer GitHub'daki ana dalınızın adı master ise burayı master yapın.
-
+  workflow_dispatch: # İŞTE BU SATIR SANA "RUN" BUTONUNU VERECEK!
+  
 jobs:
   build-and-deploy-ios:
     runs-on: macos-latest
