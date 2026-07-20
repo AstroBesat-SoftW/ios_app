@@ -17,7 +17,7 @@ jobs:
       - name: Flutter Ortamını Kur
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.22.0' # Projenizdeki flutter sürümü neyse onu yazın
+          flutter-version: '3.38.7' # Projenizdeki flutter sürümü neyse onu yazın
 
       - name: Apple Sertifikalarını Kur
         env:
