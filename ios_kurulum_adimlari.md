@@ -213,3 +213,171 @@ base64 deneme_Profile.mobileprovision > profile_base64.txt
 Klasörünüze baktığınızda içi karmaşık harf ve sayılarla dolu iki tane .txt dosyası oluştuğunu göreceksiniz. Bunlar birazdan GitHub'a yapıştıracağımız metinler.
 <img width="878" height="407" alt="image" src="https://github.com/user-attachments/assets/733ca294-25e1-4c99-895c-bb7f67390463" />
 
+------------------------
+
+7. GitHub'a Gizli Bilgileri (Secrets) Ekleme
+Sertifikalarımızı ve şifrelerimizi güvende tutmak için GitHub'ın şifreli kasasına koyacağız.
+
+Tarayıcınızdan uygulamanızın GitHub deposuna (repository) girin.
+
+Üst menüden Settings (Ayarlar) sekmesine tıklayın.
+
+Sol menüden aşağı inip Secrets and variables seçeneğine tıklayın, altından Actions sekmesini seçin.
+
+<img width="1107" height="507" alt="image" src="https://github.com/user-attachments/assets/58038388-1111-4327-a63a-7ee483773346" />
+
+Yeşil renkli New repository secret butonuna tıklayarak aşağıdaki 6 veriyi tek tek ekleyin (İsimleri büyük harflerle birebir aynı yazın):
+
+Name: BUILD_CERTIFICATE_BASE64
+Secret: (Masaüstündeki cert_base64.txt dosyasını açın, içindeki tüm yazıyı kopyalayıp buraya yapıştırın ve Add Secret deyin.)
+<img width="1883" height="811" alt="image" src="https://github.com/user-attachments/assets/54d714fc-831b-415c-b7d5-a0bfc6de90ad" />
+
+ardından sırayla bunlarıda:
+
+Name: P12_PASSWORD
+Secret: (.p12 dosyasını üretirken Git Bash'te belirlediğiniz şifreyi yazın, örn: besat123)
+
+Name: BUILD_PROVISION_PROFILE_BASE64
+Secret: (profile_base64.txt dosyasını açın, içindeki tüm yazıyı kopyalayıp buraya yapıştırın.)
+(not sonda boşluk olursa onları ekleme!!! )
+Name: KEYCHAIN_PASSWORD
+Secret: 12345678 (Sadece bu işlem için uydurulmuş geçici bir şifre, bunu yazın yeterli.)
+
+Name: APPLE_ID
+Secret: besatt59@gmail.com
+
+Name: APP_SPECIFIC_PASSWORD
+Secret: (Apple sitesinden not defterine kopyaladığınız xxxx-xxxx-xxxx-xxxx şeklindeki şifre.)
+son hali:
+<img width="1128" height="482" alt="image" src="https://github.com/user-attachments/assets/cb55993e-0071-44dd-bc19-188df7c2ebef" />
+
+
+---------------------------------
+
+8. Android Studio'da ExportOptions.plist Dosyasını Oluşturma
+Şimdi Android Studio'ya dönüyoruz. Sisteme, uygulamanın App Store için derleneceğini ve hangi kimlikleri kullanacağını söylemeliyiz.
+
+Projenizi Android Studio'da açın.
+
+Sol taraftaki proje dosyalarından ios klasörüne sağ tıklayın, New > File (Yeni Dosya) deyin.
+
+Dosyanın adını tam olarak şöyle yazın: ExportOptions.plist
+
+Açılan bu boş dosyanın içine aşağıdaki kodları birebir kopyalayıp yapıştırın (Senin Team ID ve Profil bilgini koda entegre ettim, örnek olarak kullanabilirsin):
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>method</key>
+    <string>app-store</string>
+    <key>teamID</key>
+    <string>9FMX258KA5</string>
+    <key>uploadBitcode</key>
+    <false/>
+    <key>compileBitcode</key>
+    <false/>
+    <key>uploadSymbols</key>
+    <true/>
+    <key>provisioningProfiles</key>
+    <dict>
+        <key>com.besat.deneme</key>
+        <string>deneme_Profile</string>
+    </dict>
+</dict>
+</plist>
+<img width="1102" height="557" alt="image" src="https://github.com/user-attachments/assets/3010af72-6523-45b8-a25c-607b00fe3d1c" />
+
+
+
+--------------------------
+
+
+9. GitHub Actions (YML) Dosyasını Hazırlama
+Kodumuzun Mac bilgisayarda derlenip TestFlight'a gitmesi için talimatları yazıyoruz.
+
+Android Studio'da projenizin en kök dizinine (android, ios, lib klasörleriyle aynı hizaya) sağ tıklayıp yeni bir klasör oluşturun. Adını .github koyun (başında nokta var).
+
+O klasörün içine bir klasör daha oluşturun ve adını workflows koyun.
+
+workflows klasörüne sağ tıklayıp yeni bir dosya oluşturun ve adını ios_deploy.yml koyun.
+
+İçine aşağıdaki örnek kodları yapıştırın:
+
+name: iOS TestFlight Deployment
+
+on:
+  push:
+    branches:
+      - main # Eğer GitHub'daki ana dalınızın adı master ise burayı master yapın.
+  workflow_dispatch: # İŞTE BU SATIR SANA "RUN" BUTONUNU VERECEK!
+  
+jobs:
+  build-and-deploy-ios:
+    runs-on: macos-latest
+
+    steps:
+      - name: Kodu İndir
+        uses: actions/checkout@v3
+
+      - name: Flutter Ortamını Kur
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.22.0' # Projenizdeki flutter sürümü neyse onu yazın
+
+      - name: Apple Sertifikalarını Kur
+        env:
+          BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
+          P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
+          BUILD_PROVISION_PROFILE_BASE64: ${{ secrets.BUILD_PROVISION_PROFILE_BASE64 }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          CERTIFICATE_PATH=$RUNNER_TEMP/build_certificate.p12
+          PP_PATH=$RUNNER_TEMP/build_pp.mobileprovision
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+
+          echo -n "$BUILD_CERTIFICATE_BASE64" | base64 --decode -o $CERTIFICATE_PATH
+          echo -n "$BUILD_PROVISION_PROFILE_BASE64" | base64 --decode -o $PP_PATH
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+
+          security import $CERTIFICATE_PATH -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
+          security list-keychain -d user -s $KEYCHAIN_PATH
+
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          cp $PP_PATH ~/Library/MobileDevice/Provisioning\ Profiles
+
+      - name: IPA Dosyasını Derle
+        run: |
+          flutter pub get
+          flutter build ipa --release --export-options-plist=ios/ExportOptions.plist
+
+      - name: TestFlight'a Gönder
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APP_SPECIFIC_PASSWORD: ${{ secrets.APP_SPECIFIC_PASSWORD }}
+        run: |
+          xcrun altool --upload-app -type ios -f build/ios/ipa/*.ipa --username "$APPLE_ID" --password "$APP_SPECIFIC_PASSWORD"
+
+
+
+
+  not: uygulama eklemediyseniz buradan ekleyin
+  <img width="1107" height="462" alt="image" src="https://github.com/user-attachments/assets/54d9f212-e4c9-4756-b404-1f290458603d" />
+ardından ilgili bilgileri girin:
+<img width="650" height="761" alt="image" src="https://github.com/user-attachments/assets/af47b3ec-85a1-49ea-89f4-39fd3f1948db" />
+ardından github üzerinden dosyayı çalıştırabiliriz!
+
+------------------------- 
+SON ADIM
+
+görselde daire içine alıp sıra sıra gösterdim action kısmına basıyoruz ilk sonra diğer adımları
+<img width="1118" height="461" alt="image" src="https://github.com/user-attachments/assets/60187eaf-14dd-4b09-b269-994a90583e1b" />
+bu kısımdan da run diyioruz:
+<img width="392" height="270" alt="image" src="https://github.com/user-attachments/assets/2542874f-f90e-41e3-bdc6-9036588676a6" />
+
+bu kısım sarımsı - turuncu olduğunda başlamış demektir. üstüne tıklayıp adımları takip edewbilir hata alırsak nerede aldığımızı görüp orada güncelleme yapabiliriz. enson  başarılı olduğunda ios dosyamızı bizim iiçin app stora kısmına yokllayacak.
+
+nereye yolalcak sorusu en son oluştruduğumuz app kısmına
+örnek başarılı olduğunda github adresin şu şekil olacak:
