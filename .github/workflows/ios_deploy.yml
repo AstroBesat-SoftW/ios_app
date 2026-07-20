@@ -17,7 +17,7 @@ jobs:
       - name: Flutter Ortamını Kur
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.38.7' # Projenizdeki flutter sürümü neyse onu yazın
+          flutter-version: '3.38.7'
 
       - name: Apple Sertifikalarını Kur
         env:
@@ -33,15 +33,26 @@ jobs:
           echo -n "$BUILD_CERTIFICATE_BASE64" | base64 --decode -o $CERTIFICATE_PATH
           echo -n "$BUILD_PROVISION_PROFILE_BASE64" | base64 --decode -o $PP_PATH
 
+          # Kasayı oluştur ve varsayılan yap (EKSİK OLAN YETKİ BURADA VERİLDİ)
           security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
-          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
+          security default-keychain -s $KEYCHAIN_PATH
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
 
+          # Sertifikayı içeri aktar
           security import $CERTIFICATE_PATH -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
-          security list-keychain -d user -s $KEYCHAIN_PATH
+          
+          # EN ÖNEMLİ SATIR: Derleme işlemi için sertifika kasasına okuma izni (Partition) ver!
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
 
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
           cp $PP_PATH ~/Library/MobileDevice/Provisioning\ Profiles
+
+      - name: Mac için Manuel İmzalama Ayarı (Windows Çözümü)
+        run: |
+          # Xcode'un inatla Development (Geliştirici) sertifikası aramasını engelleyip
+          # bizim yüklediğimiz TestFlight (Distribution) profillerini kullanmasını zorluyoruz.
+          sed -i '' 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/g' ios/Runner.xcodeproj/project.pbxproj
 
       - name: IPA Dosyasını Derle
         run: |
