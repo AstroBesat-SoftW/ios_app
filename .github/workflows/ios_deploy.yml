@@ -1,67 +1,103 @@
-name: iOS TestFlight Deployment
+name: iOS Build & TestFlight Upload
 
 on:
-  push:
-    branches:
-      - main # Eğer GitHub'daki ana dalınızın adı master ise burayı master yapın.
-  workflow_dispatch: # İŞTE BU SATIR SANA "RUN" BUTONUNU VERECEK!
-  
+  workflow_dispatch:
+
 jobs:
-  build-and-deploy-ios:
+  build-ios:
     runs-on: macos-latest
-
     steps:
-      - name: Kodu İndir
-        uses: actions/checkout@v3
+      - name: Kodları çek
+        uses: actions/checkout@v4
 
-      - name: Flutter Ortamını Kur
+      - name: Flutter kur
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.38.7'
+          channel: stable
 
-      - name: Apple Sertifikalarını Kur
-        env:
-          BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
-          P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
-          BUILD_PROVISION_PROFILE_BASE64: ${{ secrets.BUILD_PROVISION_PROFILE_BASE64 }}
-          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+      - name: Bağımlılıkları al
+        run: flutter pub get
+
+      - name: Eksik Uyumluluk (Null) Hatasını Önlemek İçin Info.plist Güncelle
         run: |
-          CERTIFICATE_PATH=$RUNNER_TEMP/build_certificate.p12
-          PP_PATH=$RUNNER_TEMP/build_pp.mobileprovision
-          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+          /usr/libexec/PlistBuddy -c "Add :ITSAppUsesNonExemptEncryption bool false" ios/Runner/Info.plist || /usr/libexec/PlistBuddy -c "Set :ITSAppUsesNonExemptEncryption false" ios/Runner/Info.plist
 
-          echo -n "$BUILD_CERTIFICATE_BASE64" | base64 --decode -o $CERTIFICATE_PATH
-          echo -n "$BUILD_PROVISION_PROFILE_BASE64" | base64 --decode -o $PP_PATH
+      - name: Sertifikayı keychain'e aktar
+        uses: apple-actions/import-codesign-certs@v3
+        with:
+          p12-file-base64: ${{ secrets.IOS_P12_BASE64 }}
+          p12-password: ${{ secrets.IOS_P12_PASSWORD }}
+          keychain-password: ${{ secrets.KEYCHAIN_PASSWORD }}
 
-          # Kasayı oluştur ve varsayılan yap (EKSİK OLAN YETKİ BURADA VERİLDİ)
-          security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
-          security default-keychain -s $KEYCHAIN_PATH
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
-          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
+      - name: Provisioning profile indir
+        id: provisioning
+        uses: apple-actions/download-provisioning-profiles@v4
+        with:
+          bundle-id: ${{ secrets.IOS_BUNDLE_ID }}
+          profile-type: 'IOS_APP_STORE'
+          issuer-id: ${{ secrets.APPSTORE_ISSUER_ID }}
+          api-key-id: ${{ secrets.APPSTORE_KEY_ID }}
+          api-private-key: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
 
-          # Sertifikayı içeri aktar
-          security import $CERTIFICATE_PATH -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
+      - name: Profil UUID'sini al ve ExportOptions.plist güncelle
+        run: |
+          PROFILE_PATH=$(ls -t ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision | head -n 1)
+          UUID=$(basename "$PROFILE_PATH" .mobileprovision)
+          echo "PROFILE_UUID=$UUID" >> "$GITHUB_ENV"
+          sed -i '' "s/PLACEHOLDER_PROFILE_UUID/$UUID/" ios/ExportOptions.plist
+
+      - name: Xcode İmzalama Ayarlarını Kesin Olarak Manuel'e Çevir (Bulletproof)
+        env:
+          TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
+        run: |
+          gem install xcodeproj
+          ruby -e "
+          require 'xcodeproj'
+          project = Xcodeproj::Project.open('ios/Runner.xcodeproj')
+          uuid = ENV['PROFILE_UUID']
+          team_id = ENV['TEAM_ID']
           
-          # EN ÖNEMLİ SATIR: Derleme işlemi için sertifika kasasına okuma izni (Partition) ver!
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          # Otomatik imzalamayı kapat
+          project.root_object.attributes['TargetAttributes'].each do |target, attributes|
+            attributes['ProvisioningStyle'] = 'Manual'
+          end
+          
+          # 1. Proje bazlı ayarları ez
+          project.build_configurations.each do |config|
+            config.build_settings['CODE_SIGN_STYLE'] = 'Manual'
+            config.build_settings['CODE_SIGN_IDENTITY'] = 'Apple Distribution'
+            config.build_settings['CODE_SIGN_IDENTITY[sdk=iphoneos*]'] = 'Apple Distribution'
+            config.build_settings['PROVISIONING_PROFILE_SPECIFIER'] = uuid
+            config.build_settings['DEVELOPMENT_TEAM'] = team_id
+          end
+          
+          # 2. HEDEF (Target) bazlı ayarları ez (Önceki hatayı çözen kısım burası)
+          project.targets.each do |target|
+            target.build_configurations.each do |config|
+              config.build_settings['CODE_SIGN_STYLE'] = 'Manual'
+              config.build_settings['CODE_SIGN_IDENTITY'] = 'Apple Distribution'
+              config.build_settings['CODE_SIGN_IDENTITY[sdk=iphoneos*]'] = 'Apple Distribution'
+              config.build_settings['PROVISIONING_PROFILE_SPECIFIER'] = uuid
+              config.build_settings['DEVELOPMENT_TEAM'] = team_id
+            end
+          end
+          
+          project.save
+          "
 
-          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-          cp $PP_PATH ~/Library/MobileDevice/Provisioning\ Profiles
+      - name: Flutter ile IPA oluştur
+        run: flutter build ipa --release --export-options-plist=ios/ExportOptions.plist
 
-      - name: Mac için Manuel İmzalama Ayarı (Windows Çözümü)
+      - name: IPA yolunu belirle
         run: |
-          # Xcode'un inatla Development (Geliştirici) sertifikası aramasını engelleyip
-          # bizim yüklediğimiz TestFlight (Distribution) profillerini kullanmasını zorluyoruz.
-          sed -i '' 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/g' ios/Runner.xcodeproj/project.pbxproj
+          IPA_PATH=$(find build/ios/ipa -name "*.ipa" | head -n 1)
+          echo "IPA_PATH=$IPA_PATH" >> "$GITHUB_ENV"
 
-      - name: IPA Dosyasını Derle
-        run: |
-          flutter pub get
-          flutter build ipa --release --export-options-plist=ios/ExportOptions.plist
-
-      - name: TestFlight'a Gönder
-        env:
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APP_SPECIFIC_PASSWORD: ${{ secrets.APP_SPECIFIC_PASSWORD }}
-        run: |
-          xcrun altool --upload-app -type ios -f build/ios/ipa/*.ipa --username "$APPLE_ID" --password "$APP_SPECIFIC_PASSWORD"
+      - name: TestFlight'a yükle
+        uses: apple-actions/upload-testflight-build@v3
+        with:
+          app-path: ${{ env.IPA_PATH }}
+          issuer-id: ${{ secrets.APPSTORE_ISSUER_ID }}
+          api-key-id: ${{ secrets.APPSTORE_KEY_ID }}
+          api-private-key: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
