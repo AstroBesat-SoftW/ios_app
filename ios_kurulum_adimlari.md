@@ -1,271 +1,179 @@
-Şimdi ilk olarak  windows bilgisayarımız var ve andoird studyo kullnarak flutter projesinden ilerleyerek süreci anlatacağım. nasıl imzalama yaparız ve mac kullanmadan github ile uygulamayı çıakrıız
-bunun ile ilgili maalesef türkçe ve ingilizce yazılı kaynak yoktu bu yüzden kendi tecribemi szilere adım adım anlatmak isteidm.
+# Flutter iOS Deployment from Windows (No Mac Required)
+
+This guide provides a step-by-step walkthrough on how to sign, build, and publish a Flutter iOS application to TestFlight using a Windows PC, Android Studio, and GitHub Actions—without needing a physical Mac. 
 
-ilk olarak winodws bilgisayarımızda 
-1.Windows'ta Kimlik Talebi (CSR) Oluşturma:
+Since there is a lack of comprehensive resources on this topic, I wanted to share my personal experience to help others accomplish this seamlessly.
 
-Git Bash kullanılacak.Apple'a "Ben Besat, bana sertifika ver" demek için bir dijital anahtar üretmeliyiz.
-1- Bilgisayarınızda başlat menüsünü açıp Git Bash yazın ve çalıştırın (siyah bir komut ekranı açılacak).
-2- Bilgisayarınızda gizli bir kilit (key) oluşturmak için şunu yazıp Enter'a basın:
-openssl genrsa -out besat.key 2048
-3- Şimdi Apple'a göndereceğimiz başvuru dosyasını (CSR) oluşturmak için şu komutu yapıştırıp Enter'a basın (Mail adresini kendi Apple ID mailinize göre değiştirin):
-openssl req -new -key besat.key -out besat.csr
-2. Enter'a bastıktan sonra OpenSSL sana alt alta bazı sorular soracak. Türkçe karakter (ç, ş, ğ, vs.) kullanmadan şu şekilde doldur ve her birinden sonra Enter'a bas:
+---
 
-Country Name (2 letter code): TR yaz ve Enter'a bas.
+## Stage 1: Generate a Certificate Signing Request (CSR) on Windows
 
-State or Province Name (full name): Tekirdag yaz ve Enter'a bas.
+To request a distribution certificate from Apple, we first need to generate a digital key and a Certificate Signing Request (CSR) file.
 
-Locality Name (eg, city): Tekirdag yaz ve Enter'a bas.
+1. Open the Start menu, type **Git Bash**, and launch it.
+2. Generate a private key by running the following command:
+   ```bash
+   openssl genrsa -out besat.key 2048
+   ```
+3. Generate the CSR file by running the following command (replace the email with your Apple ID email):
+   ```bash
+   openssl req -new -key besat.key -out besat.csr
+   ```
+4. OpenSSL will ask you a series of questions. Fill them out as shown below (do not use special characters) and press **Enter** after each:
+   * **Country Name (2 letter code):** `TR`
+   * **State or Province Name (full name):** `Tekirdag`
+   * **Locality Name (eg, city):** `Tekirdag`
+   * **Organization Name (eg, company):** `Besat Arif Cingar`
+   * **Organizational Unit Name (eg, section):** `IT`
+   * **Common Name (e.g. server FQDN or YOUR name):** `Besat Arif Cingar`
+   * **Email Address:** `besatt59@gmail.com`
+5. Finally, it will ask for **Extra Attributes**. Apple does not require these, so leave them empty:
+   * **A challenge password:** *(Leave blank and press Enter)*
+   * **An optional company name:** *(Leave blank and press Enter)*
 
-Organization Name (eg, company): Besat Arif Cingar yaz ve Enter'a bas.
+You now have a perfectly formatted `besat.csr` file ready to send to Apple.
 
-Organizational Unit Name (eg, section): IT yaz ve Enter'a bas.
+---
 
-Common Name (e.g. server FQDN or YOUR name): Besat Arif Cingar yaz ve Enter'a bas.
+## Stage 2: Configure iOS Settings in Android Studio
 
-Email Address: besatt59@gmail.com yaz ve Enter'a bas.
+Open your Flutter project in Android Studio to configure the foundational iOS settings.
 
-3. Son olarak sana "Extra Attributes" (Ekstra özellikler) soracak. Apple bunları istemez. Bunları boş geçmek için hiçbir şey yazmadan doğrudan Enter'a bas:
+1. Navigate to `ios/Runner/Info.plist`.
+2. Define your app's display name using the `CFBundleDisplayName` key:
+   ```xml
+   <key>CFBundleDisplayName</key>
+   <string>AstroDash</string>
+   ```
+3. **Permissions:** If your app uses the camera, internet, or gallery, you *must* add permission descriptions in the `Info.plist`. (Apple will reject your TestFlight upload if these are missing).
+4. **Icons:** Set up your iOS app icons. You can use the `flutter_launcher_icons` package from pub.dev to generate these automatically.
 
-A challenge password: (Boş bırak, Enter'a bas)
+---
 
-An optional company name: (Boş bırak, Enter'a bas)
+## Stage 3: Register Your App ID
 
-Bunu yaptığında terminal normal alt satıra geçecektir. Hiçbir uyarı, hiçbir hata almayacaksın ve Apple'ın istediği tüm bilgileri içeren kusursuz, dört dörtlük bir besat.csr dosyan masaüstünde hazır olacak.
+We need to register your app's name and Bundle ID with Apple.
 
+1. Go to [developer.apple.com](https://developer.apple.com) and log in.
+2. Navigate to **Certificates, Identifiers & Profiles**.
+3. Select **Identifiers** from the left menu and click the blue **+ (plus)** button.
+4. Select **App IDs** and click **Continue**.
+5. Select **App** as the type and click **Continue**.
+6. Fill out the form:
+   * **Description:** Enter your app's name (e.g., `deneme`).
+   * **Bundle ID:** Select **Explicit** and enter your bundle identifier (e.g., `com.besat.deneme`).
+7. Click **Continue** and then **Register**. 
 
+---
 
+## Stage 4: Get the iOS Distribution Certificate (.cer)
 
-örnek:
+Now, we will upload the CSR file we created earlier to get an approved certificate from Apple.
 
-<img width="791" height="527" alt="image" src="https://github.com/user-attachments/assets/3eaa9f5f-4eec-4f6a-ba26-923bc704a2bf" />
-çıktı:
-<img width="753" height="105" alt="image" src="https://github.com/user-attachments/assets/b5ee5436-a287-4985-8f24-5786307b9041" />
+1. On the Apple Developer portal, click **Certificates** on the left menu.
+2. Click the blue **+ (plus)** button.
+3. Under the *Software* section, select **Apple Distribution** and click **Continue**.
+4. Click **Choose File** and upload the `besat.csr` file you created on your desktop. Click **Continue**.
+5. Click **Download** to save the `ios_distribution.cer` file. Move this file into the same folder as your `.key` and `.csr` files.
 
------------------
-AŞAMA 2
-Android Studio'da iOS Ayarlarının Yapılandırılması
-Info.plist ve uygulama kimliği
-Android Studio'da projenizi açın ve iOS tarafı için gerekli temel tanımlamaları yapın.
+---
 
-ios/Runner/Info.plist dosyasını açın.
+## Stage 5: Generate the .p12 File on Windows
 
-Uygulamanızın görünür adını belirleyin. Örneğin:
---CFBundleDisplayName
-AstroDash--
-<img width="1492" height="595" alt="image" src="https://github.com/user-attachments/assets/a160b5df-b0ed-464d-87a4-b0574ddda058" />
+Apple’s `.cer` file needs to be combined with our private key to create a `.p12` file, which is required for signing the app.
 
-Eğer uygulamanız kamera, internet, galeri gibi izinler kullanıyorsa, bunların açıklamalarını mutlaka Info.plist içine ekleyin. (Apple, iznin neden istendiği yazmıyorsa TestFlight'a yüklemeyi reddeder).
+1. Open **Git Bash** in the folder containing your certificate files.
+2. Convert the Apple certificate to a readable PEM format:
+   ```bash
+   openssl x509 -in ios_distribution.cer -inform DER -out ios_distribution.pem -outform PEM
+   ```
+3. Combine your key and the PEM file to create the `.p12` file:
+   ```bash
+   openssl pkcs12 -export -inkey besat.key -in ios_distribution.pem -out Certificate.p12
+   ```
+   *(If the above command fails, try adding the legacy flag:)*
+   ```bash
+   openssl pkcs12 -export -inkey besat.key -in ios_distribution.pem -out Certificate.p12 -legacy
+   ```
+4. You will be prompted to enter an **Export Password**. Type a secure password (e.g., `besat123`) and press Enter. (Characters will be hidden as you type). Verify the password by typing it again. 
 
-İkonlarınızı ayarlayın. Bunun için pub.dev üzerinden flutter_launcher_icons paketini kullanabilirsiniz; bu paket iOS ikonlarını otomatik üretir.
+You now have the highly important `Certificate.p12` file.
 
---------------
+---
 
+## Stage 6: Create the Provisioning Profile
 
-AŞAMA 3
+We need a document that tells Apple: "I am authorized to send this specific app to the store using this certificate."
 
-Uygulama Kimliğini (App ID) Tanıtma
-Apple'a ilk olarak uygulamanın adını ve paket adını (com.besat.dash) kaydetmemiz gerekiyor.
+1. Go back to the Apple Developer portal and select **Profiles** from the left menu.
+2. Click the blue **+ (plus)** button.
+3. Under the *Distribution* section, select **App Store** and click **Continue**.
+4. Select your App ID from the dropdown menu (e.g., `deneme - com.besat.deneme`) and click **Continue**.
+5. Select the certificate you generated in the previous steps and click **Continue**.
+6. Give your profile a name (e.g., `deneme_Profile`) and click **Generate**.
+7. Click **Download** and place the `.mobileprovision` file in your certificates folder.
 
-Tarayıcını aç ve developer.apple.com adresine girip Apple hesabınla giriş yap.
+---
 
-Açılan sayfada Certificates, Identifiers & Profiles menüsüne tıkla.
-<img width="1881" height="920" alt="image" src="https://github.com/user-attachments/assets/0d355348-4167-4618-9980-d81491ee5712" />
+## Stage 7: Generate an App-Specific Password
 
+To avoid hardcoding your personal Apple ID password into GitHub, we need to generate a single-use API password.
 
-Sol menüden Identifiers (Kimlikler) sekmesine tıkla.
+1. Go to [appleid.apple.com](https://appleid.apple.com) and log in.
+2. Navigate to **Sign-In and Security**.
+3. Select **App-Specific Passwords**.
+4. Click **Generate an app-specific password** (or the + button).
+5. Name it something recognizable, like `GitHub Actions`.
+6. Copy the generated password (format: `xxxx-xxxx-xxxx-xxxx`) and save it securely in a text file. You will not be able to view it again once you close the window.
 
-Sayfanın ortasındaki (veya sağ üstteki) mavi renkli + (artı) butonuna tıkla.
-<img width="1051" height="292" alt="image" src="https://github.com/user-attachments/assets/1f02c48e-25d6-42b8-abd4-8d0bea9af353" />
+---
 
+## Stage 8: Convert Files to Base64 Text
 
-Listeden App IDs seçili kalsın, sağ üstten Continue (Devam) butonuna tıkla.
+GitHub Secrets only accept text, not files. We must convert our certificate and provisioning profile into Base64 strings.
 
-Tip olarak App seçili kalsın, tekrar Continue de.
+1. Open **Git Bash** in your certificates folder.
+2. Convert the `.p12` file:
+   ```bash
+   base64 Certificate.p12 > cert_base64.txt
+   ```
+3. Convert the `.mobileprovision` file:
+   ```bash
+   base64 deneme_Profile.mobileprovision > profile_base64.txt
+   ```
+You will now see two text files filled with complex alphanumeric strings.
 
-Karşına form çıkacak:
+---
 
-Description kısmına uygulamanın adını yaz örnek proejene göre: deneme
+## Stage 9: Add Secrets to GitHub
 
-Bundle ID kısmında Explicit seçili olsun ve altındaki kutuya şunu yaz: com.besat.deneme
+We will store our sensitive data securely in GitHub's vault.
 
-<img width="1385" height="558" alt="image" src="https://github.com/user-attachments/assets/e3408522-52dc-40d0-8476-c345210e2825" />
+1. Go to your repository on GitHub.
+2. Navigate to **Settings** > **Secrets and variables** > **Actions**.
+3. Click the green **New repository secret** button and add the following 6 secrets exactly as named:
 
-Sayfanın en altındaki listeden bir şey seçmene gerek yok, direkt sağ üstten Continue ve sonra Register butonuna tıkla. (Uygulamamız Apple'a kaydedildi!)
+| Secret Name | Secret Value |
+| :--- | :--- |
+| `BUILD_CERTIFICATE_BASE64` | Copy and paste the entire contents of `cert_base64.txt`. |
+| `P12_PASSWORD` | The export password you set for your `.p12` file (e.g., `besat123`). |
+| `BUILD_PROVISION_PROFILE_BASE64` | Copy and paste the entire contents of `profile_base64.txt`. *(Ensure there are no trailing spaces!)* |
+| `KEYCHAIN_PASSWORD` | `12345678` *(This is just a temporary, arbitrary password used during the build process).* |
+| `APPLE_ID` | Your Apple ID email address (e.g., `besatt59@gmail.com`). |
+| `APP_SPECIFIC_PASSWORD` | The `xxxx-xxxx-xxxx-xxxx` password you generated in Step 7. |
 
+---
 
-----------------
+## Stage 10: Create the ExportOptions.plist in Android Studio
 
-pple'dan Ana Sertifikayı (.cer) Alma
-Şimdi masaüstünde ürettiğin başvuru dosyasını (CSR) Apple'a verip onaylı sertifikanı alacağız.
+We need to tell the build system that the app is bound for the App Store and specify which identities to use.
 
-Aynı sitede sol menüden Certificates sekmesine tıkla.
+1. Open your project in Android Studio.
+2. Right-click the `ios` folder in your project directory and select **New > File**.
+3. Name the file exactly: `ExportOptions.plist`.
+4. Paste the following XML into the file (be sure to replace the `teamID`, the bundle ID, and the provisioning profile name with your own details):
 
-Mavi renkli + (artı) butonuna tıkla.
-<img width="1013" height="313" alt="image" src="https://github.com/user-attachments/assets/1d588d11-161e-479e-b4b8-6ec2dfe58a3f" />
-
-Software başlığı altındaki Apple Distribution seçeneğini işaretle ve sağ üstten Continue de.
-<img width="1390" height="497" alt="image" src="https://github.com/user-attachments/assets/d584f67f-ff7e-4e79-bc4a-365043ce7eec" />
-
-Karşına "Upload a Certificate Signing Request" (CSR Yükle) ekranı gelecek. Choose File (Dosya Seç) butonuna tıkla.
-
-Masaüstündeki sertifika klasörüne gir ve senin ürettiğin besat.csr dosyasını seç, sağ üstten Continue de.
-
-İşlem başarılı! Ekranda çıkan Download butonuna tıkla.
-
-<img width="1423" height="461" alt="image" src="https://github.com/user-attachments/assets/24dd07f9-e747-4326-ac2a-1f490557ae19" />
-
-
-Bilgisayarına ios_distribution.cer adında bir dosya inecek. Bu dosyayı indirilenlerden kesip masaüstündeki sertifika klasörünün içine, diğer dosyaların yanına yapıştır.
-
-<img width="885" height="287" alt="image" src="https://github.com/user-attachments/assets/91d4f6d0-a57b-4600-b38e-b635b53ffb5b" />
-
-
----------------------------------------
-
-3. Asıl Hedef: Windows'ta .p12 Dosyasını Üretme
-Apple'ın verdiği .cer dosyası doğrudan işimize yaramıyor, bunu kendi gizli anahtarımızla birleştirip .p12 formatına çevireceğiz.
-
-Masaüstündeki sertifika klasöründe açık olan Git Bash ekranına geri dön.
-
-Önce Apple'ın dosyasını bizim okuyabileceğimiz formata çevirmek için şu kodu yapıştır ve Enter'a bas:
-openssl x509 -in ios_distribution.cer -inform DER -out ios_distribution.pem -outform PEM
-
-Şimdi bu dosyayı senin en başta ürettiğin key ile birleştirip .p12 yapmak için şu kodu yapıştır ve Enter'a bas:
-openssl pkcs12 -export -inkey besat.key -in ios_distribution.pem -out Certificate.p12
-bu üst çalışmazsa bunu da deneyebilirsin ----1
-openssl pkcs12 -export -inkey besat.key -in ios_distribution.pem -out Certificate.p12 -legacy
-
-Enter'a basınca ekranda "Enter Export Password:" diyecek. Burada belirleyeceğin şifre çok önemli (Örneğin besat123 yaz). Yazarken ekranda harfler görünmez, sen yazıp Enter'a bas.
-<img width="823" height="277" alt="image" src="https://github.com/user-attachments/assets/5c2c075e-1e0a-4f5d-9712-e200ddc0be31" />
-
-"Verifying - Enter Export Password:" diyecek. Aynı şifreyi tekrar yaz ve Enter'a bas.
-(Tebrikler! Klasörüne bakarsan en önemli dosyan olan Certificate.p12 dosyasının oluştuğunu göreceksin.)
-<img width="846" height="296" alt="image" src="https://github.com/user-attachments/assets/c24e52b4-86e5-4fd3-8d0f-8003f17c490b" />
-
-----------------------------------------------
-
-4. Dağıtım Profilini (Provisioning Profile) Alma
-Sertifikamız var, uygulamamız belli. Şimdi Apple'a "Ben bu sertifikayla bu uygulamayı mağazaya yollayacağım" diyen bir belge alacağız.
-
-Tekrar developer.apple.com sitesine dön, sol menüden Profiles sekmesine tıkla.
-
-Mavi renkli + (artı) butonuna tıkla.
-<img width="1047" height="307" alt="image" src="https://github.com/user-attachments/assets/2c55ebc7-c8ed-451e-8f95-9703a1af3a06" />
-
-Distribution (Dağıtım) başlığı altındaki App Store seçeneğini işaretleyip Continue de.
-<img width="1437" height="790" alt="image" src="https://github.com/user-attachments/assets/1e8939b5-8705-43ee-bc10-9b6fc03cde90" />
-
-App ID menüsüne tıkla, listeden kendi uygulamanı (deneme - com.besat.deneme) seçip Continue de.
-<img width="1467" height="455" alt="image" src="https://github.com/user-attachments/assets/296f80aa-86c8-4c65-ac63-49af6fb19e98" />
-
-
-
-Bir önceki adımda oluşturduğun sertifikan listede görünecek. Yanındaki yuvarlağı işaretle ve Continue de.
-<img width="1376" height="428" alt="image" src="https://github.com/user-attachments/assets/3290e8b1-882c-4250-9a66-875655dae4c4" />
-
-Provisioning Profile Name kutusuna İngilizce bir isim yaz (Örn: deneme_Profile) ve Generate butonuna bas.
-<img width="1388" height="703" alt="image" src="https://github.com/user-attachments/assets/5ef22cca-1e8a-47bc-bb1e-3f3daf4200de" />
-
-Çıkan ekrandan Download butonuna tıkla. Bilgisayarına inecek olan bu .mobileprovision uzantılı dosyayı da alıp masaüstündeki sertifika klasörüne at
-
-
-
--------------------------
-
-
-5. Uygulamaya Özel Şifre Alma (API / Apple Kimlik Şifresi)
-Kendi kişisel Apple şifreni kodlara yazmamak için GitHub'ın kullanacağı tek kullanımlık bir şifre üreteceğiz.
-
-Tarayıcıda yeni bir sekme aç ve appleid.apple.com adresine gir, giriş yap.
-
-Sol menüden Giriş Yapma ve Güvenlik (Sign-In and Security) sekmesine tıkla.
-
-Uygulamaya Özgü Parolalar (App-Specific Passwords) seçeneğine tıkla.
-<img width="1057" height="596" alt="image" src="https://github.com/user-attachments/assets/f652ffe4-1880-4662-b1cb-80ff3a116820" />
-
-Parola Oluştur (veya + butonu) butonuna tıkla.
-
-Sana uygulamanın adını soracak, oraya GitHub Actions yazıp oluştur de (kendi şifreni tekrar isteyebilir).
-<img width="547" height="462" alt="image" src="https://github.com/user-attachments/assets/9f320b83-92b6-4a7c-840a-49a16ff7c05a" />
-
-Ekrana xxxx-xxxx-xxxx-xxxx formatında bir şifre verecek. Bu şifreyi kopyala ve bilgisayarında bir Not Defteri'ne kaydet, pencereyi kapatırsan şifreyi bir daha göremezsin.
-<img width="531" height="352" alt="image" src="https://github.com/user-attachments/assets/35c4519a-6921-4a03-b8f5-65d0c60d4a00" />
-
-İşte bu kadar! Artık masaüstündeki klasöründe .p12 dosyan, .mobileprovision dosyan ve not defterinde Apple'dan aldığın şifren var.
-
-<img width="911" height="315" alt="image" src="https://github.com/user-attachments/assets/35db99ac-4076-4839-bbe5-c1afcea22312" />
-
-
---------------------------------
-
-6. Dosyaları Metne Çevirme (Base64 İşlemi)
-GitHub, dosya yüklemeyi değil metin yüklemeyi (Secret) kabul eder. Bu yüzden elimizdeki dosyaları şifreli metinlere çevireceğiz.
-
-Masaüstündeki sertifika klasöründe Git Bash ekranını tekrar açın (Eğer kapattıysanız klasöre sağ tıklayıp "Git Bash Here" diyebilirsiniz).
-
-Önce .p12 dosyasını metne çevirmek için şu kodu yapıştırıp Enter'a basın:
-base64 Certificate.p12 > cert_base64.txt
-
-Şimdi .mobileprovision dosyasını metne çevirmek için şu kodu yapıştırıp Enter'a basın:
-base64 deneme_Profile.mobileprovision > profile_base64.txt
-<img width="577" height="197" alt="image" src="https://github.com/user-attachments/assets/d80548ae-046f-442f-8965-4199b9cacb83" />
-
-Klasörünüze baktığınızda içi karmaşık harf ve sayılarla dolu iki tane .txt dosyası oluştuğunu göreceksiniz. Bunlar birazdan GitHub'a yapıştıracağımız metinler.
-<img width="878" height="407" alt="image" src="https://github.com/user-attachments/assets/733ca294-25e1-4c99-895c-bb7f67390463" />
-
-------------------------
-
-7. GitHub'a Gizli Bilgileri (Secrets) Ekleme
-Sertifikalarımızı ve şifrelerimizi güvende tutmak için GitHub'ın şifreli kasasına koyacağız.
-
-Tarayıcınızdan uygulamanızın GitHub deposuna (repository) girin.
-
-Üst menüden Settings (Ayarlar) sekmesine tıklayın.
-
-Sol menüden aşağı inip Secrets and variables seçeneğine tıklayın, altından Actions sekmesini seçin.
-
-<img width="1107" height="507" alt="image" src="https://github.com/user-attachments/assets/58038388-1111-4327-a63a-7ee483773346" />
-
-Yeşil renkli New repository secret butonuna tıklayarak aşağıdaki 6 veriyi tek tek ekleyin (İsimleri büyük harflerle birebir aynı yazın):
-
-Name: BUILD_CERTIFICATE_BASE64
-Secret: (Masaüstündeki cert_base64.txt dosyasını açın, içindeki tüm yazıyı kopyalayıp buraya yapıştırın ve Add Secret deyin.)
-<img width="1883" height="811" alt="image" src="https://github.com/user-attachments/assets/54d714fc-831b-415c-b7d5-a0bfc6de90ad" />
-
-ardından sırayla bunlarıda:
-
-Name: P12_PASSWORD
-Secret: (.p12 dosyasını üretirken Git Bash'te belirlediğiniz şifreyi yazın, örn: besat123)
-
-Name: BUILD_PROVISION_PROFILE_BASE64
-Secret: (profile_base64.txt dosyasını açın, içindeki tüm yazıyı kopyalayıp buraya yapıştırın.)
-(not sonda boşluk olursa onları ekleme!!! )
-Name: KEYCHAIN_PASSWORD
-Secret: 12345678 (Sadece bu işlem için uydurulmuş geçici bir şifre, bunu yazın yeterli.)
-
-Name: APPLE_ID
-Secret: besatt59@gmail.com
-
-Name: APP_SPECIFIC_PASSWORD
-Secret: (Apple sitesinden not defterine kopyaladığınız xxxx-xxxx-xxxx-xxxx şeklindeki şifre.)
-son hali:
-<img width="1128" height="482" alt="image" src="https://github.com/user-attachments/assets/cb55993e-0071-44dd-bc19-188df7c2ebef" />
-
-
----------------------------------
-
-8. Android Studio'da ExportOptions.plist Dosyasını Oluşturma
-Şimdi Android Studio'ya dönüyoruz. Sisteme, uygulamanın App Store için derleneceğini ve hangi kimlikleri kullanacağını söylemeliyiz.
-
-Projenizi Android Studio'da açın.
-
-Sol taraftaki proje dosyalarından ios klasörüne sağ tıklayın, New > File (Yeni Dosya) deyin.
-
-Dosyanın adını tam olarak şöyle yazın: ExportOptions.plist
-
-Açılan bu boş dosyanın içine aşağıdaki kodları birebir kopyalayıp yapıştırın (Senin Team ID ve Profil bilgini koda entegre ettim, örnek olarak kullanabilirsin):
+```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -287,46 +195,42 @@ Açılan bu boş dosyanın içine aşağıdaki kodları birebir kopyalayıp yap�
     </dict>
 </dict>
 </plist>
-<img width="1102" height="557" alt="image" src="https://github.com/user-attachments/assets/3010af72-6523-45b8-a25c-607b00fe3d1c" />
+```
 
+---
 
+## Stage 11: Create the GitHub Actions Workflow (YML)
 
---------------------------
+This file contains the instructions for GitHub's remote Mac machines to build and deploy your app.
 
+1. In the root directory of your project (same level as `lib`, `ios`, `android`), create a new folder named `.github` (don't forget the dot).
+2. Inside `.github`, create another folder named `workflows`.
+3. Inside `workflows`, create a file named `ios_deploy.yml`.
+4. Paste the following code into the file:
 
-9. GitHub Actions (YML) Dosyasını Hazırlama
-Kodumuzun Mac bilgisayarda derlenip TestFlight'a gitmesi için talimatları yazıyoruz.
-
-Android Studio'da projenizin en kök dizinine (android, ios, lib klasörleriyle aynı hizaya) sağ tıklayıp yeni bir klasör oluşturun. Adını .github koyun (başında nokta var).
-
-O klasörün içine bir klasör daha oluşturun ve adını workflows koyun.
-
-workflows klasörüne sağ tıklayıp yeni bir dosya oluşturun ve adını ios_deploy.yml koyun.
-
-İçine aşağıdaki örnek kodları yapıştırın:
-
+```yaml
 name: iOS TestFlight Deployment
 
 on:
   push:
     branches:
-      - main # Eğer GitHub'daki ana dalınızın adı master ise burayı master yapın.
-  workflow_dispatch: # İŞTE BU SATIR SANA "RUN" BUTONUNU VERECEK!
+      - main # Change this to 'master' if that is your main branch name
+  workflow_dispatch: # THIS ENABLES THE MANUAL "RUN" BUTTON!
   
 jobs:
   build-and-deploy-ios:
     runs-on: macos-latest
 
     steps:
-      - name: Kodu İndir
+      - name: Checkout Code
         uses: actions/checkout@v3
 
-      - name: Flutter Ortamını Kur
+      - name: Setup Flutter Environment
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.22.0' # Projenizdeki flutter sürümü neyse onu yazın
+          flutter-version: '3.22.0' # Ensure this matches the Flutter version in your project
 
-      - name: Apple Sertifikalarını Kur
+      - name: Install Apple Certificates
         env:
           BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
           P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
@@ -350,36 +254,28 @@ jobs:
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
           cp $PP_PATH ~/Library/MobileDevice/Provisioning\ Profiles
 
-      - name: IPA Dosyasını Derle
+      - name: Build IPA File
         run: |
           flutter pub get
           flutter build ipa --release --export-options-plist=ios/ExportOptions.plist
 
-      - name: TestFlight'a Gönder
+      - name: Upload to TestFlight
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APP_SPECIFIC_PASSWORD: ${{ secrets.APP_SPECIFIC_PASSWORD }}
         run: |
           xcrun altool --upload-app -type ios -f build/ios/ipa/*.ipa --username "$APPLE_ID" --password "$APP_SPECIFIC_PASSWORD"
+```
 
+*(Note: Ensure you have already created the placeholder for your application in App Store Connect before running this workflow!)*
 
+---
 
+## Final Step: Run the Deployment
 
-  not: uygulama eklemediyseniz buradan ekleyin
-  <img width="1107" height="462" alt="image" src="https://github.com/user-attachments/assets/54d9f212-e4c9-4756-b404-1f290458603d" />
-ardından ilgili bilgileri girin:
-<img width="650" height="761" alt="image" src="https://github.com/user-attachments/assets/af47b3ec-85a1-49ea-89f4-39fd3f1948db" />
-ardından github üzerinden dosyayı çalıştırabiliriz!
+1. Go to your repository on GitHub.
+2. Click on the **Actions** tab at the top.
+3. On the left sidebar, click on **iOS TestFlight Deployment**.
+4. On the right side, click the **Run workflow** dropdown and click the green **Run workflow** button.
 
-------------------------- 
-SON ADIM
-
-görselde daire içine alıp sıra sıra gösterdim action kısmına basıyoruz ilk sonra diğer adımları
-<img width="1118" height="461" alt="image" src="https://github.com/user-attachments/assets/60187eaf-14dd-4b09-b269-994a90583e1b" />
-bu kısımdan da run diyioruz:
-<img width="392" height="270" alt="image" src="https://github.com/user-attachments/assets/2542874f-f90e-41e3-bdc6-9036588676a6" />
-
-bu kısım sarımsı - turuncu olduğunda başlamış demektir. üstüne tıklayıp adımları takip edewbilir hata alırsak nerede aldığımızı görüp orada güncelleme yapabiliriz. enson  başarılı olduğunda ios dosyamızı bizim iiçin app stora kısmına yokllayacak.
-
-nereye yolalcak sorusu en son oluştruduğumuz app kısmına
-örnek başarılı olduğunda github adresin şu şekil olacak:
+Once the workflow is triggered, an indicator will turn yellow/orange to show it is in progress. You can click on the active run to watch the logs step-by-step. If an error occurs, the logs will show you exactly where to fix it. If it successfully finishes, your iOS app file has been pushed directly to App Store Connect / TestFlight!
