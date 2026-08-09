@@ -1,6 +1,6 @@
 # Flutter iOS Deployment from Windows (No Mac Required)
 
-This guide provides a step-by-step walkthrough on how to sign, build, and publish a Flutter iOS application to TestFlight using a Windows PC, Android Studio, and GitHub Actions—without needing a physical Mac. 
+This guide provides a step by step walkthrough on how to sign, build, and publish a Flutter iOS application to TestFlight using a Windows PC, Android Studio, and GitHub Actions—without needing a physical Mac. 
 
 Since there is a lack of comprehensive resources on this topic, I wanted to share my personal experience to help others accomplish this seamlessly.
 
